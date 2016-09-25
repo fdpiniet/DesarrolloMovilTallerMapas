@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">TallerMapas</string>
+
+    <string name="menu_gps">GPS</string>
+    <string name="menu_http">HTTP/JSON</string>
+    <string name="title_activity_maps">Map</string>
 </resources>

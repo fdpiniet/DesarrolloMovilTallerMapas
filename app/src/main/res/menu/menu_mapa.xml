@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/menu_gps" android:title="@string/menu_gps"></item>
+    <item android:id="@+id/menu_http" android:title="@string/menu_http"></item>
+</menu>
