@@ -3,5 +3,6 @@
 
     <string name="menu_gps">GPS</string>
     <string name="menu_http">HTTP/JSON</string>
-    <string name="title_activity_maps">Map</string>
+
+    <string name="antes_pedir_permisos">Permisos insuficientes. Presione otra vez.</string>
 </resources>
