@@ -1,100 +1,139 @@
 package xyz.fabianpineda.desarrollomovil.tallermapas;
 
 import android.Manifest;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.google.android.gms.maps.model.MarkerOptions;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, ActivityCompat.OnRequestPermissionsResultCallback {
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, ActivityCompat.OnRequestPermissionsResultCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
     public static final int CODIGO_PETICION_PERMISO = 1;
 
-    private boolean permisoGPS;
-    private boolean permisoHTTP;
+    private LocationManager locationManager;
 
     private GoogleMap map;
+    private GoogleApiClient googlePlay;
+    private boolean googlePlayAPIConectado;
     private SupportMapFragment mapFragment;
-    private boolean mapaListo;
+
+    protected void mostrarGPS() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Permiso denegado: GPS.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (!(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))) {
+            mostrarSettingsGPS();
+            return;
+        }
+
+        if (!map.isMyLocationEnabled()) {
+            map.setMyLocationEnabled(true);
+        }
+
+        if (!googlePlayAPIConectado || !googlePlay.isConnected()) {
+            Toast.makeText(this, "Reconectando a Google Play. Intente nuevamente.", Toast.LENGTH_SHORT).show();
+            conectarGooglePlay();
+            return;
+        }
+
+        Location loc = LocationServices.FusedLocationApi.getLastLocation(googlePlay);
+        map.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(loc.getLatitude(), loc.getLongitude())));
+
+    }
+
+    protected void mostrarHTTP() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Permiso denegado: Internet.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+    }
+
+    protected void mostrarSettingsGPS() {
+        final AppCompatActivity inst = this;
+        final Intent settings = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+
+        new AlertDialog.Builder(this)
+            .setTitle("Ubicación")
+            .setMessage("La aplicación necesita acceso a su ubicación para continuar.\n\nDesea activar el servicio de ubicación en Settings?")
+            .setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                    Toast.makeText(inst, "Operación cancelada.", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setPositiveButton("Abrir Settings", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                    startActivity(settings);
+                }
+            })
+        .create().show();
+    }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
-        mapaListo = true;
         map = googleMap;
-
-        LatLng ubicacionUTB = new LatLng(10.370337, -75.465449);
-        LatLngBounds utbBounds = new LatLngBounds(new LatLng(10.368202, -75.466161), new LatLng(10.371140, -75.464468));
-        CameraPosition inicial = (new CameraPosition.Builder()).target(utbBounds.getCenter()).zoom(18.5f).bearing(140f).build();
-
-        /*
-         * La parte checkSelfPermission, por mas innecesaria que sea, es un requisito o de Android,
-         * o del IDE. "Necesita una manera de asegurarse que si se están comprobando permisos."
-         */
-        map.setMyLocationEnabled(permisoGPS || ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED);
-
         map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-        map.setMinZoomPreference(18.5f);
-        map.setMaxZoomPreference(20.0f);
-        map.setLatLngBoundsForCameraTarget(utbBounds);
-
-        map.addMarker(new MarkerOptions().position(ubicacionUTB)).setVisible(true);
-
-        map.moveCamera(CameraUpdateFactory.newCameraPosition(inicial));
     }
 
-    protected void cargarMapa() {
-        if (!mapaListo) {
-            mapFragment.getMapAsync(this);
-        }
-    }
+    protected void permisoConcedido(String permiso) {
+        String formatoPermisoConcedido = "Permiso concedido%s.";
 
-    public void permisoConcedido(String permiso) {
         switch(permiso) {
             case Manifest.permission.ACCESS_FINE_LOCATION:
-                permisoGPS = true;
+                Toast.makeText(this, String.format(formatoPermisoConcedido, ": GPS"), Toast.LENGTH_SHORT).show();
+                mostrarGPS();
                 break;
             case Manifest.permission.INTERNET:
-                permisoHTTP = true;
+                Toast.makeText(this, String.format(formatoPermisoConcedido, ": Internet"), Toast.LENGTH_SHORT).show();
+                mostrarHTTP();
                 break;
             default:
-                // ...
+                // Ocurre cuando no se concedió ningun permiso. No debería ocurrir.
+                Toast.makeText(this, String.format(formatoPermisoConcedido, ""), Toast.LENGTH_SHORT).show();
                 break;
         }
-
-        cargarMapa();
     }
 
-    public void permisoDenegado(String permiso) {
+    protected void permisoDenegado(String permiso) {
+        String formatoErrorPermiso = "Permiso denegado%s.";
+
         if (permiso == null) {
+            Toast.makeText(this, String.format(formatoErrorPermiso, ""), Toast.LENGTH_SHORT).show();
             return;
         }
 
         switch(permiso) {
             case Manifest.permission.ACCESS_FINE_LOCATION:
-                permisoGPS = false;
+                Toast.makeText(this, String.format(formatoErrorPermiso, ": GPS"), Toast.LENGTH_SHORT).show();
                 break;
             case Manifest.permission.INTERNET:
-                permisoHTTP = false;
+                Toast.makeText(this, String.format(formatoErrorPermiso, ": Internet"), Toast.LENGTH_SHORT).show();
                 break;
             default:
-                // ...
+                Toast.makeText(this, String.format(formatoErrorPermiso, ""), Toast.LENGTH_SHORT).show();
                 break;
         }
-
-        cargarMapa();
     }
 
     @Override
@@ -112,17 +151,19 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    public void pedirPermiso(String permiso, String mensaje) {
-        Toast popup;
-
-        if (ContextCompat.checkSelfPermission(this, permiso)!= PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, permiso)) {
-                popup = Toast.makeText(this, mensaje, Toast.LENGTH_SHORT);
-            } else {
-                ActivityCompat.requestPermissions(this, new String[]{permiso}, CODIGO_PETICION_PERMISO);
-            }
+    protected void opcionGPS() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            mostrarGPS();
         } else {
-            permisoConcedido(permiso);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, CODIGO_PETICION_PERMISO);
+        }
+    }
+
+    protected void opcionHTTP() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
+            mostrarHTTP();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.INTERNET}, CODIGO_PETICION_PERMISO);
         }
     }
 
@@ -130,20 +171,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public boolean onOptionsItemSelected(MenuItem item) {
         switch(item.getItemId()) {
             case R.id.menu_gps:
-                if (!permisoGPS) {
-                    pedirPermiso(Manifest.permission.ACCESS_FINE_LOCATION, getString(R.string.antes_pedir_permisos));
-                } else {
-                    cargarMapa();
-                }
-
+                opcionGPS();
                 break;
             case R.id.menu_http:
-                if (!permisoHTTP) {
-                    pedirPermiso(Manifest.permission.INTERNET, getString(R.string.antes_pedir_permisos));
-                } else {
-                    cargarMapa();
-                }
-
+                opcionHTTP();
                 break;
             default:
                 return false;
@@ -163,16 +194,30 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        permisoGPS = false;
-        permisoHTTP = false;
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
-        mapaListo = false;
+        googlePlay = new GoogleApiClient.Builder(this)
+            .addConnectionCallbacks(this)
+            .addOnConnectionFailedListener(this)
+            .addApi(LocationServices.API)
+        .build();
+        googlePlayAPIConectado = false;
+
+
         mapFragment = SupportMapFragment.newInstance();
         getSupportFragmentManager().beginTransaction().add(R.id.activity_main, mapFragment).commit();
+        mapFragment.getMapAsync(this);
+    }
+
+    protected void conectarGooglePlay() {
+        if (googlePlay != null && !googlePlay.isConnected()) {
+            googlePlay.connect();
+        }
     }
 
     @Override
     protected void onStart() {
+        conectarGooglePlay();
         super.onStart();
     }
 
@@ -186,8 +231,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onResume();
     }
 
+    protected void desconectarGooglePlay() {
+        if (googlePlay != null && googlePlay.isConnected()) {
+            googlePlay.disconnect();
+        }
+    }
+
     @Override
     protected void onStop() {
+        desconectarGooglePlay();
         super.onStop();
     }
 
@@ -205,5 +257,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         } else {
             // ...
         }
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        Toast.makeText(this, "Conectado a Google Play.", Toast.LENGTH_SHORT).show();
+        googlePlayAPIConectado = true;
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        googlePlayAPIConectado = false;
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Toast.makeText(this, "Error conectando a Google Play.", Toast.LENGTH_SHORT).show();
+        googlePlayAPIConectado = false;
     }
 }
